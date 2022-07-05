@@ -1,9 +1,8 @@
 use base64::{decode_config, encode_config, URL_SAFE_NO_PAD};
 use photon_rs::transform::SamplingFilter;
 use prost::Message;
-use std::convert::TryFrom;
 
-mod abi;
+mod abi; // 声明 abi.rs
 pub use abi::*;
 
 impl ImageSpec {
@@ -12,11 +11,11 @@ impl ImageSpec {
     }
 }
 
-//  让 ImageSpec 可以生成一个字符串
+// 让 ImageSpec 可以生成一个字符串
 impl From<&ImageSpec> for String {
     fn from(image_spec: &ImageSpec) -> Self {
         let data = image_spec.encode_to_vec();
-        encode_confg(data, URL_SAFE_NO_PAD)
+        encode_config(data, URL_SAFE_NO_PAD)
     }
 }
 
@@ -25,14 +24,14 @@ impl TryFrom<&str> for ImageSpec {
     type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let data = decode_config(value, URL_SAFE_NO_PAD);
+        let data = decode_config(value, URL_SAFE_NO_PAD)?;
         Ok(ImageSpec::decode(&data[..])?)
     }
 }
 
 // 辅助函数，photon_rs 相应的方法里需要字符串
 impl filter::Filter {
-    pub fn to_str(&self) -> Option<&'static str> {
+    pub fn to_str(self) -> Option<&'static str> {
         match self {
             filter::Filter::Unspecified => None,
             filter::Filter::Oceanic => Some("oceanic"),
@@ -56,7 +55,7 @@ impl From<resize::SampleFilter> for SamplingFilter {
     }
 }
 
-// 提供一些辅助函数，让创建一个 spec 个过程简单一些
+// 提供一些辅助函数，让创建一个 spec 的过程简单一些
 impl Spec {
     pub fn new_resize_seam_carve(width: u32, height: u32) -> Self {
         Self {
@@ -79,6 +78,7 @@ impl Spec {
             })),
         }
     }
+
     pub fn new_filter(filter: filter::Filter) -> Self {
         Self {
             data: Some(spec::Data::Filter(Filter {
@@ -87,5 +87,24 @@ impl Spec {
         }
     }
 
-    pub
+    pub fn new_watermark(x: u32, y: u32) -> Self {
+        Self {
+            data: Some(spec::Data::Watermark(Watermark { x, y })),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::borrow::Borrow;
+
+    #[test]
+    fn encoded_spec_could_be_decoded() {
+        let spec1 = Spec::new_resize(600, 600, resize::SampleFilter::CatmullRom);
+        let spec2 = Spec::new_filter(filter::Filter::Marine);
+        let image_spec = ImageSpec::new(vec![spec1, spec2]);
+        let s: String = image_spec.borrow().into();
+        assert_eq!(image_spec, s.as_str().try_into().unwrap());
+    }
 }
